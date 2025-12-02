@@ -21,7 +21,6 @@ def send_nexus_request(commands, mode='cli_show'):
     if isinstance(commands, str):
         commands = [commands]
 
-    # Payload dinamis sesuai mode yang diminta
     payload = {
         "ins_api": {
             "version": "1.0",
@@ -46,18 +45,14 @@ def send_nexus_request(commands, mode='cli_show'):
         if response.status_code == 200:
             result = response.json()
             
-            # Error handling spesifik NX-API
-            # Kadang HTTP 200 tapi di dalamnya ada error message dari switch
             if 'ins_api' in result and 'outputs' in result['ins_api']:
                 output = result['ins_api']['outputs']['output']
                 
-                # Cek jika output berupa list (multiple commands)
                 if isinstance(output, list):
                     for out in output:
                         if 'code' in out and out['code'] != '200':
                             print(f"Nexus Error: {out.get('msg', 'Unknown Error')}")
                             return None
-                # Cek jika output berupa dict (single command)
                 elif isinstance(output, dict):
                     if 'code' in output and output['code'] != '200':
                         print(f"Nexus Error: {output.get('msg', 'Unknown Error')}")
@@ -72,10 +67,8 @@ def send_nexus_request(commands, mode='cli_show'):
         print(f"Connection Error: {e}")
         return None
 
-# --- Wrapper Functions ---
 
 def test_authentication():
-    """Test koneksi menggunakan mode cli_show"""
     print("Mencoba menghubungkan ke Sandbox...")
     result = send_nexus_request("show version", mode='cli_show')
     if result:
@@ -86,19 +79,15 @@ def test_authentication():
         return False
 
 def get_all_vlans():
-    """Mengambil data VLAN menggunakan mode cli_show"""
     command = "show vlan brief"
     result = send_nexus_request(command, mode='cli_show')
 
     if result:
         try:
-            # Navigasi struktur JSON yang dalam dari Cisco
             if 'ins_api' in result and 'outputs' in result['ins_api']:
                 output = result['ins_api']['outputs']['output']
                 if 'body' in output:
                     body = output['body']
-                    
-                    # Logic parsing tabel yang fleksibel
                     if 'TABLE_vlanbriefxbrief' in body:
                         vlans = body['TABLE_vlanbriefxbrief']['ROW_vlanbriefxbrief']
                     elif 'TABLE_vlanbrief' in body:
@@ -106,7 +95,6 @@ def get_all_vlans():
                     else:
                         return []
 
-                    # Normalisasi: Jika hasil cuma 1, API mengembalikan dict, bukan list
                     if isinstance(vlans, dict):
                         return [vlans]
                     return vlans
@@ -116,16 +104,11 @@ def get_all_vlans():
     return []
 
 def create_vlan(vlan_id, vlan_name):
-    """Membuat VLAN baru menggunakan mode cli_conf"""
-    # Di mode cli_conf, kita tidak perlu 'configure terminal' secara eksplisit
-    # karena tipe request-nya sudah konfigurasi. Tapi tetap disertakan juga tidak apa-apa.
     commands = [
         f"vlan {vlan_id}",
         f"name {vlan_name}",
         "exit"
     ]
-    
-    # PANGGIL DENGAN MODE cli_conf
     if send_nexus_request(commands, mode='cli_conf'):
         print(f"Successfully created VLAN {vlan_id} ({vlan_name})")
         return True
@@ -136,8 +119,7 @@ def create_vlan(vlan_id, vlan_name):
 def delete_vlan(vlan_id):
     """Menghapus VLAN menggunakan mode cli_conf"""
     command = f"no vlan {vlan_id}"
-    
-    # PANGGIL DENGAN MODE cli_conf
+
     if send_nexus_request(command, mode='cli_conf'):
         print(f"Successfully deleted VLAN {vlan_id}")
         return True
@@ -146,7 +128,6 @@ def delete_vlan(vlan_id):
         return False
 
 def update_vlan_port(vlan_id, interface, mode='access'):
-    """Update interface menggunakan mode cli_conf"""
     commands = [
         f"interface {interface}",
         f"switchport mode {mode}"
@@ -157,7 +138,6 @@ def update_vlan_port(vlan_id, interface, mode='access'):
     else:
         commands.append(f"switchport trunk allowed vlan add {vlan_id}")
 
-    # PANGGIL DENGAN MODE cli_conf
     if send_nexus_request(commands, mode='cli_conf'):
         print(f"Successfully updated interface {interface}")
         return True
@@ -172,7 +152,6 @@ def count_vlans():
 def get_vlan_by_id(vlan_id):
     vlans = get_all_vlans()
     for vlan in vlans:
-        # Menangani variasi key API (kadang ada -utf, kadang tidak)
         vid = vlan.get('vlanshowbr-vlanid-utf', vlan.get('vlanshowbr-vlanid'))
         if str(vid) == str(vlan_id):
             return vlan
